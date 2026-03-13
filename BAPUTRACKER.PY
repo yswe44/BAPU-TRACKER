@@ -1,18 +1,16 @@
-# Install libraries
-!pip install websockets requests nest_asyncio python-telegram-bot
-
 import asyncio
 import json
 import websockets
 import requests
 import nest_asyncio
+import os
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 nest_asyncio.apply()
 
-BOT_TOKEN = "8605392061:AAFJlnYvb8PbIo1LEwYrYIGRUf_0z6e-W4k"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 chat_keywords = {}
 chat_track_all = {}
@@ -29,21 +27,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_track_all.setdefault(chat_id, False)
 
     await update.message.reply_text(
-        "🤖 Pump.fun Sniper Bot Active\n\n"
-        "Commands:\n"
-        "/track word\n"
+        "🚀 BAPU Tracker Active\n\n"
+        "/track keyword\n"
         "/trackall\n"
-        "/stop word\n"
+        "/stop keyword\n"
         "/stopall\n"
         "/list"
     )
-
 
 async def track(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
 
-    if len(context.args) == 0:
+    if not context.args:
         await update.message.reply_text("Usage: /track keyword")
         return
 
@@ -54,64 +50,49 @@ async def track(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_track_all[chat_id] = False
 
-    await update.message.reply_text(f"✅ Tracking keyword: {word}")
-
+    await update.message.reply_text(f"Tracking keyword: {word}")
 
 async def trackall(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
-
     chat_track_all[chat_id] = True
-    chat_keywords.setdefault(chat_id, set())
 
-    await update.message.reply_text("🚀 Tracking ALL tokens")
-
+    await update.message.reply_text("Tracking ALL tokens")
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
 
-    if len(context.args) == 0:
-        await update.message.reply_text("Usage: /stop keyword")
+    if not context.args:
         return
 
     word = context.args[0].lower()
 
     if word in chat_keywords.get(chat_id, set()):
         chat_keywords[chat_id].remove(word)
-        await update.message.reply_text(f"❌ Stopped tracking: {word}")
-    else:
-        await update.message.reply_text("Keyword not found")
-
 
 async def stopall(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
-
     chat_keywords[chat_id] = set()
     chat_track_all[chat_id] = False
-
-    await update.message.reply_text("🛑 All tracking stopped")
-
 
 async def list_keywords(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
 
-    if not chat_keywords.get(chat_id):
-        await update.message.reply_text("No keywords tracked.")
+    keys = chat_keywords.get(chat_id, set())
+
+    if not keys:
+        await update.message.reply_text("No keywords tracked")
         return
 
-    text = "📊 Tracked keywords:\n\n"
-
-    for k in chat_keywords[chat_id]:
-        text += f"• {k}\n"
+    text = "\n".join(keys)
 
     await update.message.reply_text(text)
 
-
 # --------------------------
-# MARKETCAP CALCULATION
+# MARKETCAP
 # --------------------------
 
 def calculate_marketcap(data):
@@ -140,9 +121,8 @@ def calculate_marketcap(data):
     except:
         return "N/A"
 
-
 # --------------------------
-# MESSAGE SENDER
+# SEND MESSAGE
 # --------------------------
 
 def send_message(chat_id, message, mint):
@@ -151,14 +131,8 @@ def send_message(chat_id, message, mint):
 
     keyboard = {
         "inline_keyboard": [[
-            {
-                "text": "🚀 Pump",
-                "url": f"https://pump.fun/coin/{mint}"
-            },
-            {
-                "text": "📈 Dexscreener",
-                "url": f"https://dexscreener.com/solana/{mint}"
-            }
+            {"text": "🚀 Pump", "url": f"https://pump.fun/coin/{mint}"},
+            {"text": "📈 Dexscreener", "url": f"https://dexscreener.com/solana/{mint}"}
         ]]
     }
 
@@ -166,11 +140,11 @@ def send_message(chat_id, message, mint):
         "chat_id": chat_id,
         "text": message,
         "parse_mode": "Markdown",
-        "reply_markup": keyboard,
-        "disable_web_page_preview": True
+        "reply_markup": keyboard
     })
+
 # --------------------------
-# PUMP LISTENER
+# LISTENER
 # --------------------------
 
 async def listen():
@@ -187,7 +161,7 @@ async def listen():
                     "method": "subscribeNewToken"
                 }))
 
-                print("Listening for Pump launches...")
+                print("Listening for launches...")
 
                 while True:
 
@@ -197,14 +171,14 @@ async def listen():
 
                     data = raw.get("data", raw)
 
-                    name = data.get("name", "")
-                    symbol = data.get("symbol", "")
-                    mint = data.get("mint", "")
+                    name = data.get("name","")
+                    symbol = data.get("symbol","")
+                    mint = data.get("mint","")
 
                     if not mint:
                         continue
 
-                    bonding = data.get("bondingCurveProgress") or data.get("bonding_curve_progress") or "N/A"
+                    bonding = data.get("bondingCurveProgress","N/A")
 
                     marketcap = calculate_marketcap(data)
 
@@ -221,7 +195,7 @@ async def listen():
 📋 *CA*
 `{mint}`
 
-📈 *Bonding Curve:* {bonding}%
+📈 *Bonding:* {bonding}%
 """
 
                     all_chats = set(chat_keywords.keys()) | set(chat_track_all.keys())
@@ -229,24 +203,25 @@ async def listen():
                     for chat_id in all_chats:
 
                         if chat_track_all.get(chat_id):
+
                             send_message(chat_id, message, mint)
 
                         else:
-                            for k in chat_keywords.get(chat_id, set()):
+
+                            for k in chat_keywords.get(chat_id,set()):
+
                                 if k in text:
                                     send_message(chat_id, message, mint)
                                     break
 
         except Exception as e:
 
-            print("Websocket error:", e)
-            print("Reconnecting in 5 seconds...")
+            print("Reconnect:", e)
 
             await asyncio.sleep(5)
 
-
 # --------------------------
-# START BOT
+# MAIN
 # --------------------------
 
 async def main():
@@ -262,9 +237,7 @@ async def main():
 
     asyncio.create_task(listen())
 
-    print("Bot started")
-
     await app.run_polling()
 
-
-await main()
+if __name__ == "__main__":
+    asyncio.run(main())
