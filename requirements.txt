@@ -1,0 +1,4 @@
+websockets
+requests
+nest_asyncio
+python-telegram-bot
